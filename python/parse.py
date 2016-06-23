@@ -19,6 +19,8 @@
 # Boston, MA 02110-1301, USA.
 #
 
+HASH_SIZE=16
+
 import time, os, sys
 from string import split, join
 from altitude import decode_alt
@@ -203,7 +205,7 @@ class mv_reply(data_field):
     vds1 = self.get_bits(33,4)
     vds2 = self.get_bits(37,4)
     if vds1 not in (3,) or vds2 not in (0,):
-      raise NoHandlerError(bds1)
+      raise NoHandlerError(vds1)
     return int(vds1)
 
   def get_numbits(self):
@@ -216,7 +218,7 @@ class modes_reply(data_field):
             5: {"df": (1,5), "fs": (6,3), "dr": (9,5), "um": (14,6), "id": (20,13), "ap": (33,24)},
            11: {"df": (1,5), "ca": (6,3), "aa": (9,24), "pi": (33,24)},
            16: {"df": (1,5), "vs": (6,1), "sl": (9,3), "ri": (14,4), "ac": (20,13), "mv": (33,56), "ap": (88,24)},
-           17: {"df": (1,5), "ca": (6,3), "aa": (9,24), "me": (33,56, me_reply), "pi": (88,24)},
+           17: {"df": (1,5), "ca": (6,3), "aa": (9,24), "me": (33,56, me_reply), "pi": (88,24), "hash": (113,HASH_SIZE)},
            20: {"df": (1,5), "fs": (6,3), "dr": (9,5), "um": (14,6), "ac": (20,13), "mb": (33,56, mb_reply), "ap": (88,24)},
            21: {"df": (1,5), "fs": (6,3), "dr": (9,5), "um": (14,6), "id": (20,13), "mb": (33,56, mb_reply), "ap": (88,24)},
            24: {"df": (1,5), "ke": (6,1), "nd": (7,4), "md": (11,80), "ap": (88,24)}

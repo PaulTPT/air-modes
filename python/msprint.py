@@ -21,8 +21,8 @@
 
 import time, os, sys
 from string import split, join
-import air_modes_tesla
-from air_modes_tesla.exceptions import *
+import air_modes
+from air_modes.exceptions import *
 import math
 
 #TODO get rid of class and convert to functions
@@ -43,7 +43,6 @@ class output_print:
     return "(%i %.8f) " % (msg.rssi, msg.timestamp)
 
   def _print(self, msg):
-    msg += "Youpiiiii !"
     if self._callback is None:
         print msg
     else:
@@ -177,6 +176,8 @@ class output_print:
           retstr += "Type 17 with FTC=%i from %x not implemented" % (msg.data["ftc"], icao24)
     except ADSBError:
         return
+
+    retstr += " with hash= %x" %msg.data["hash"]
 
     self._print(retstr)
 
