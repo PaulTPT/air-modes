@@ -27,7 +27,7 @@ def html_template(my_position, json_file):
         </style>
         <script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=false">
         </script>
-        <script type="text/javascript" src="http://google-maps-utility-library-v3.googlecode.com/svn/tags/markerwithlabel/1.1.9/src/markerwithlabel.js">
+        <script type="text/javascript" src="https://code.google.com/p/google-maps-utility-library-v3/source/browse/trunk/markerwithlabel/src/markerwithlabel.js">
         </script>
         <script type="text/javascript">
             var map;

@@ -41,6 +41,8 @@ extern "C"
 #include <string.h>
 }
 
+#include "params.h"
+
 namespace gr {
 
 air_modes::slicer::sptr air_modes::slicer::make(gr::msg_queue::sptr queue) {
@@ -143,7 +145,7 @@ int air_modes::slicer_impl::work(int noutput_items,
 
         //it's slice time!
         //TODO: don't repeat your work here, you already have the first 5 bits
-        for(int j = 0; j < packet_length; j++) {
+        for(int j = 0; j < packet_length+HASH_SIZE; j++) {
             slice_result_t slice_result = llslicer(in[i+j*2], in[i+j*2+1], rx_packet.reference_level);
 
             //put the data into the packet
@@ -184,7 +186,7 @@ int air_modes::slicer_impl::work(int noutput_items,
         pmt::pmt_t tstamp = tag_iter->value;
 
         d_payload.str("");
-        for(int m = 0; m < packet_length/8; m++) {
+        for(int m = 0; m < (packet_length+HASH_SIZE)/8; m++) {
             d_payload << std::hex << std::setw(2) << std::setfill('0') << unsigned(rx_packet.data[m]);
         }
 
