@@ -188,6 +188,8 @@ int air_modes::slicer_impl::work(int noutput_items,
         d_payload.str("");
         for(int m = 0; m < (packet_length+HASH_SIZE)/8; m++) {
             d_payload << std::hex << std::setw(2) << std::setfill('0') << unsigned(rx_packet.data[m]);
+            GR_LOG_DEBUG(LOG,m);
+            GR_LOG_DEBUG(LOG,rx_packet.data[m]);
         }
 
         d_payload << " " << std::setw(6) << rx_packet.crc << " " << std::dec << rx_packet.reference_level
