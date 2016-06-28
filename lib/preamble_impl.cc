@@ -21,7 +21,6 @@
 # 
 */
 
-#include "params.h"
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -33,6 +32,7 @@
 #include <string.h>
 #include <iostream>
 #include <gnuradio/tags.h>
+#include <gr_air_modes/types.h>
 
 namespace gr {
 
@@ -234,8 +234,7 @@ int air_modes::preamble_impl::general_work(int noutput_items,
                     );
 
             //produce only one output per work call -- TODO this should probably change
-            if(0) std::cout << "Preamble consumed " << i+(120+HASH_SIZE)*2*d_samples_per_chip << "with i=" << i << ", returned 240 + 2* HASH_LENGTH" << std::endl;
-
+            if(0) std::cout << "Preamble consumed " << i+(120+HASH_SIZE)*2*d_samples_per_chip << " with i=" << i << ", returned 240 + 2* HASH_LENGTH" << std::endl;
             consume_each(i+(120+HASH_SIZE)*2*d_samples_per_chip);
             return (120+HASH_SIZE)*2;
         }

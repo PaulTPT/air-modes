@@ -19,7 +19,7 @@
 # Boston, MA 02110-1301, USA.
 #
 
-HASH_SIZE=16
+HASH_SIZE=8
 
 import time, os, sys
 from string import split, join
@@ -225,12 +225,13 @@ class modes_reply(data_field):
           }
 
   def is_long(self):
-    return self.data > (1 << 56)
+    return self.data > (1 << 56+HASH_SIZE)
 
   def get_numbits(self):
-    return 112 if self.is_long() else 56
+    return 112+HASH_SIZE if self.is_long() else 56+HASH_SIZE
 
   def get_type(self):
+    #print self.get_bits(1,5)
     return self.get_bits(1,5)
 
 #unscramble mode A/C-style squawk codes for type 5 replies below
@@ -433,6 +434,7 @@ def make_parser(pub):
                                    air_modes.stamp(int(int_timestamp), float(frac_timestamp)))
       pub["modes_dl"] = ret
       pub["type%i_dl" % ret.data.get_type()] = ret
+      #print ret.data.get_type()
     except ADSBError:
       pass
 

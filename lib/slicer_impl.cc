@@ -41,7 +41,6 @@ extern "C"
 #include <string.h>
 }
 
-#include "params.h"
 
 namespace gr {
 
@@ -119,7 +118,7 @@ int air_modes::slicer_impl::work(int noutput_items,
         uint64_t i = tag_iter->offset - abs_sample_cnt;
         modes_packet rx_packet;
 
-        memset(&rx_packet.data, 0x00, 14 * sizeof(unsigned char));
+        memset(&rx_packet.data, 0x00, 14 +HASH_SIZE/8 * sizeof(unsigned char));
         memset(&rx_packet.lowconfbits, 0x00, 24 * sizeof(unsigned char));
         rx_packet.numlowconf = 0;
 
@@ -168,6 +167,7 @@ int air_modes::slicer_impl::work(int noutput_items,
         if(zeroes) {continue;} //toss it
 
         rx_packet.message_type = (rx_packet.data[0] >> 3) & 0x1F; //get the message type to make decisions on ECC methods
+        //GR_LOG_DEBUG(d_logger,rx_packet.message_type);
 
         if(rx_packet.type == Short_Packet && rx_packet.message_type != 11 && rx_packet.numlowconf > 0) {continue;}
         if(rx_packet.message_type == 11 && rx_packet.numlowconf >= 10) {continue;}
@@ -187,13 +187,15 @@ int air_modes::slicer_impl::work(int noutput_items,
 
         d_payload.str("");
         for(int m = 0; m < (packet_length+HASH_SIZE)/8; m++) {
+            ///std::cout << m << " ";
             d_payload << std::hex << std::setw(2) << std::setfill('0') << unsigned(rx_packet.data[m]);
-            GR_LOG_DEBUG(LOG,m);
-            GR_LOG_DEBUG(LOG,rx_packet.data[m]);
+            //std::cout << std::hex << std::setw(2) << std::setfill('0') << unsigned(rx_packet.data[m]) << " ";
         }
 
         d_payload << " " << std::setw(6) << rx_packet.crc << " " << std::dec << rx_packet.reference_level
                   << " " << pmt::to_uint64(pmt::tuple_ref(tstamp, 0)) << " " << std::setprecision(10) << pmt::to_double(pmt::tuple_ref(tstamp, 1));
+        //std::cout<< " " << std::setw(6) << rx_packet.crc << " " << std::dec << rx_packet.reference_level
+                  //<< " " << pmt::to_uint64(pmt::tuple_ref(tstamp, 0)) << " " << std::setprecision(10) << pmt::to_double(pmt::tuple_ref(tstamp, 1));
         gr::message::sptr msg = gr::message::make_from_string(std::string(d_payload.str()));
         d_queue->handle(msg);
     }
