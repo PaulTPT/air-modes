@@ -19,7 +19,7 @@
 # Boston, MA 02110-1301, USA.
 #
 
-HASH_SIZE=8
+HASH_SIZE=16
 
 import time, os, sys
 from string import split, join
@@ -30,7 +30,8 @@ from air_modes.exceptions import *
 
 #this implements a packet class which can retrieve its own fields.
 class data_field:
-  def __init__(self, data):
+  def __init__(self, data, length=0):
+    self.length=length
     self.data = data
     self.fields = self.parse()
 
@@ -217,10 +218,12 @@ class modes_reply(data_field):
             4: {"df": (1,5), "fs": (6,3), "dr": (9,5), "um": (14,6), "ac": (20,13), "ap": (33,24)},
             5: {"df": (1,5), "fs": (6,3), "dr": (9,5), "um": (14,6), "id": (20,13), "ap": (33,24)},
            11: {"df": (1,5), "ca": (6,3), "aa": (9,24), "pi": (33,24)},
-           16: {"df": (1,5), "vs": (6,1), "sl": (9,3), "ri": (14,4), "ac": (20,13), "mv": (33,56), "ap": (88,24)},
-           17: {"df": (1,5), "ca": (6,3), "aa": (9,24), "me": (33,56, me_reply), "pi": (88,24), "hash": (113,HASH_SIZE)},
-           20: {"df": (1,5), "fs": (6,3), "dr": (9,5), "um": (14,6), "ac": (20,13), "mb": (33,56, mb_reply), "ap": (88,24)},
-           21: {"df": (1,5), "fs": (6,3), "dr": (9,5), "um": (14,6), "id": (20,13), "mb": (33,56, mb_reply), "ap": (88,24)},
+           14: {"df": (1, 5), "sync": (6, 3), "addr": (9, 24), "key": (33, 256), "sig": (289, 320),"crc": (609,24)},
+           15: {"df": (1, 5), "ca": (6, 3), "addr": (9, 24), "key": (33, 256), "crc": (289, 24)},
+           16: {"df": (1,5), "vs": (6,1), "sl": (9,3), "ri": (14,4), "ac": (20,13), "mv": (33,56), "ap": (89,24)},
+           17: {"df": (1,5), "ca": (6,3), "aa": (9,24), "me": (33,56, me_reply), "pi": (89,24),"count": (113,8), "hash": (121,HASH_SIZE)},
+           20: {"df": (1,5), "fs": (6,3), "dr": (9,5), "um": (14,6), "ac": (20,13), "mb": (33,56, mb_reply), "ap": (89,24)},
+           21: {"df": (1,5), "fs": (6,3), "dr": (9,5), "um": (14,6), "id": (20,13), "mb": (33,56, mb_reply), "ap": (89,24)},
            24: {"df": (1,5), "ke": (6,1), "nd": (7,4), "md": (11,80), "ap": (88,24)}
           }
 
@@ -228,11 +231,14 @@ class modes_reply(data_field):
     return self.data > (1 << 56+HASH_SIZE)
 
   def get_numbits(self):
-    return 112+HASH_SIZE if self.is_long() else 56+HASH_SIZE
+    return self.length
 
   def get_type(self):
     #print self.get_bits(1,5)
     return self.get_bits(1,5)
+
+  def get_data(self):
+    return self.data
 
 #unscramble mode A/C-style squawk codes for type 5 replies below
 def decode_id(id):
@@ -426,15 +432,15 @@ def parse_TCAS_CRM(data):
 def make_parser(pub):
   publisher = pub
   def publish(message):
-    [data, ecc, reference, int_timestamp, frac_timestamp] = message.split()
+    [data, length, ecc, reference, int_timestamp, frac_timestamp] = message.split()
     try:
-      ret = air_modes.modes_report(modes_reply(int(data, 16)),
+      ret = air_modes.modes_report(modes_reply(int(data, 16), int(length)),
                                    int(ecc, 16),
                                    10.0*math.log10(max(1e-8,float(reference))),
                                    air_modes.stamp(int(int_timestamp), float(frac_timestamp)))
       pub["modes_dl"] = ret
       pub["type%i_dl" % ret.data.get_type()] = ret
-      #print ret.data.get_type()
+      print data
     except ADSBError:
       pass
 

@@ -58,7 +58,7 @@ air_modes::preamble_impl::preamble_impl(float channel_rate, float threshold_db) 
 void air_modes::preamble_impl::set_rate(float channel_rate) {
     d_samples_per_chip = channel_rate / d_chip_rate; //0.5us
     d_samples_per_symbol = d_samples_per_chip * 2; //1 us
-    d_check_width = (120 + HASH_SIZE) * d_samples_per_symbol; //112 symbols + 8 'symbols' preamble = 120 symbols
+    d_check_width = PACKET_MAX_SIZE * 8 * d_samples_per_symbol;
     d_sample_rate = channel_rate;
     set_output_multiple(1+d_check_width*2);
     set_history(d_samples_per_symbol);
@@ -211,14 +211,14 @@ int air_modes::preamble_impl::general_work(int noutput_items,
             if(!valid_preamble) continue;
 
             //be sure we've got enough room in the input buffer to copy out a whole packet
-            if(ninputs-i < (120 + HASH_SIZE) *d_samples_per_symbol) {
+            if(ninputs-i < (PACKET_MAX_SIZE * 8) *d_samples_per_symbol) {
                 consume_each(std::max(i-1,0));
                 if(0) std::cout << "Preamble consumed " << std::max(i-1,0) << ", returned 0 (no room)" << std::endl;
                 return 0;
             }
 
             //all right i'm prepared to call this a preamble
-            for(int j=0; j<(120+HASH_SIZE)*2; j++) {
+            for(int j=0; j<(PACKET_MAX_SIZE * 8)*2; j++) {
                 out[j] = in[i+int(j*d_samples_per_chip)] - inavg[i];
             }
 
@@ -234,9 +234,10 @@ int air_modes::preamble_impl::general_work(int noutput_items,
                     );
 
             //produce only one output per work call -- TODO this should probably change
-            if(0) std::cout << "Preamble consumed " << i+(120+HASH_SIZE)*2*d_samples_per_chip << " with i=" << i << ", returned 240 + 2* HASH_LENGTH" << std::endl;
-            consume_each(i+(120+HASH_SIZE)*2*d_samples_per_chip);
-            return (120+HASH_SIZE)*2;
+            if(0) std::cout << "Preamble consumed " << i+(PACKET_MAX_SIZE * 8)*2*d_samples_per_chip << " with i=" << i << ", returned PACKET_MAX_SIZE * 8 * 2" << std::endl;
+            consume_each(i+(PACKET_MIN_SIZE) *8*2*d_samples_per_chip);
+            std::cout << "Preamble found"<< std::endl;
+            return (PACKET_MAX_SIZE) * 8 *2;
         }
     }
 

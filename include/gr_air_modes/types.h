@@ -20,16 +20,19 @@
 # 
 */
 
-#define HASH_SIZE 8
+#define PACKET_MAX_SIZE 80 //Max packet length in bytes (Signature) (+1 for preamble)
+#define PACKET_MIN_SIZE 8 //Max packet length in bytes (Signature) (+1 for preamble)
+
+#define HASH_SIZE 2 // Size of the Hash in bytes
 
 #ifndef AIR_MODES_TYPES_H
 #define AIR_MODES_TYPES_H
 
-typedef enum { No_Packet = 0, Short_Packet = 1, Fruited_Packet = 2, Long_Packet = 3 } framer_packet_type;
+typedef enum { No_Packet = 0, Short_Packet = 1, Fruited_Packet = 2, Long_Packet = 3, Short_Packet_Hash = 4, Long_Packet_Hash = 5, Signature_Packet = 6, Key_Packet = 7 } framer_packet_type;
 typedef enum { No_Error = 0, Solution_Found, Too_Many_LCBs, No_Solution, Multiple_Solutions } bruteResultTypeDef;
 
 struct modes_packet {
-	unsigned char data[14 + HASH_SIZE/8];
+	unsigned char data[14 + PACKET_MAX_SIZE];
 //	unsigned char confidence[14]; //112 bits of boolean high/low confidence data for each bit
 	unsigned char lowconfbits[24]; //positions of low confidence bits within the packet
 

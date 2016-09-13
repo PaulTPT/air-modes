@@ -57,10 +57,8 @@ air_modes::slicer_impl::slicer_impl(gr::msg_queue::sptr queue) :
     d_chip_rate = 2000000; //2Mchips per second (1/0.5us)
     d_samples_per_chip = 1;//FIXME this is constant now channel_rate / d_chip_rate;
     d_samples_per_symbol = d_samples_per_chip * 2;
-    d_check_width = (120+HASH_SIZE) * d_samples_per_symbol; //how far you will have to look ahead
     d_queue = queue;
 
-    set_output_multiple(d_check_width*2); //how do you specify buffer size for sinks?
 }
 
 //this slicer is courtesy of Lincoln Labs. supposedly it is more resistant to mode A/C FRUIT.
@@ -105,20 +103,20 @@ int air_modes::slicer_impl::work(int noutput_items,
                           gr_vector_void_star &output_items)
 {
     const float *in = (const float *) input_items[0];
-    int size = noutput_items - d_check_width; //since it's a sync block, i assume that it runs with ninput_items = noutput_items
-
-    if(0) std::cout << "Slicer called with " << size << " samples" << std::endl;
+    //std::cout << "noutput_items " << noutput_items << std::endl;
+    int size=0;
+    int max_size = PACKET_MAX_SIZE * 8 * d_samples_per_symbol;
 
     std::vector<gr::tag_t> tags;
     uint64_t abs_sample_cnt = nitems_read(0);
-    get_tags_in_range(tags, 0, abs_sample_cnt, abs_sample_cnt + size, pmt::string_to_symbol("preamble_found"));
+    get_tags_in_range(tags, 0, abs_sample_cnt, abs_sample_cnt + max_size, pmt::string_to_symbol("preamble_found"));
     std::vector<gr::tag_t>::iterator tag_iter;
 
     for(tag_iter = tags.begin(); tag_iter != tags.end(); tag_iter++) {
         uint64_t i = tag_iter->offset - abs_sample_cnt;
         modes_packet rx_packet;
 
-        memset(&rx_packet.data, 0x00, 14 +HASH_SIZE/8 * sizeof(unsigned char));
+        memset(&rx_packet.data, 0x00, PACKET_MAX_SIZE * sizeof(unsigned char));
         memset(&rx_packet.lowconfbits, 0x00, 24 * sizeof(unsigned char));
         rx_packet.numlowconf = 0;
 
@@ -138,13 +136,34 @@ int air_modes::slicer_impl::work(int noutput_items,
             slice_result_t slice_result = llslicer(in[i+j*2], in[i+j*2+1], rx_packet.reference_level);
             if(slice_result.decision) pkt_hdr += 1 << (4-j);
         }
-        if(pkt_hdr == 16 or pkt_hdr == 17 or pkt_hdr == 20 or pkt_hdr == 21) rx_packet.type = Long_Packet;
-        else rx_packet.type = Short_Packet;
-        int packet_length = (rx_packet.type == framer_packet_type(Short_Packet)) ? 56 : 112;
+
+        int packet_length = 0;
+
+        std::cout << "Header: " << std::dec << (int)pkt_hdr << std::endl;
+
+
+        if(pkt_hdr == 16 or pkt_hdr == 20 or pkt_hdr == 21){
+            rx_packet.type = Long_Packet;
+            packet_length = 112;
+        }else if (pkt_hdr == 17){
+            rx_packet.type = Long_Packet_Hash;
+            packet_length = 120 + HASH_SIZE*8;
+        }else if (pkt_hdr == 14){
+            rx_packet.type = Signature_Packet;
+            packet_length = 632;
+        }else if (pkt_hdr == 15){
+            rx_packet.type = Key_Packet;
+            packet_length = 312;
+        }else{
+            rx_packet.type = Short_Packet;
+            packet_length = 56;
+        }
+
+        std::cout << "Packet type : " << rx_packet.type << ", size " << packet_length << std::endl;
 
         //it's slice time!
         //TODO: don't repeat your work here, you already have the first 5 bits
-        for(int j = 0; j < packet_length+HASH_SIZE; j++) {
+        for(int j = 0; j < packet_length; j++) {
             slice_result_t slice_result = llslicer(in[i+j*2], in[i+j*2+1], rx_packet.reference_level);
 
             //put the data into the packet
@@ -172,35 +191,60 @@ int air_modes::slicer_impl::work(int noutput_items,
         if(rx_packet.type == Short_Packet && rx_packet.message_type != 11 && rx_packet.numlowconf > 0) {continue;}
         if(rx_packet.message_type == 11 && rx_packet.numlowconf >= 10) {continue;}
 
-        rx_packet.crc = modes_check_crc(rx_packet.data, (packet_length/8)-3);
-        unsigned int ap = rx_packet.data[packet_length/8-3] << 16
-                        | rx_packet.data[packet_length/8-2] << 8
-                        | rx_packet.data[packet_length/8-1] << 0;
+        unsigned int ap =0;
+
+        if (rx_packet.type==Long_Packet_Hash){
+            rx_packet.crc = modes_check_crc(rx_packet.data, 11);
+            ap = rx_packet.data[11] << 16
+                            | rx_packet.data[12] << 8
+                            | rx_packet.data[13] << 0;
+        }else{
+
+            rx_packet.crc = modes_check_crc(rx_packet.data, (packet_length/8)-3);
+            std::cout << "CRC : " << std::hex << std::setw(6) << std::setfill('0') << rx_packet.crc << std::endl;
+            ap = rx_packet.data[packet_length/8-3] << 16
+                            | rx_packet.data[packet_length/8-2] << 8
+                            | rx_packet.data[packet_length/8-1] << 0;
+            std::cout << "ap : " << std::hex << std::setw(6) << std::setfill('0') << ap << std::endl;
+
+        }
+
         rx_packet.crc ^= ap;
 
         //crc for packets that aren't type 11 or type 17 is encoded with the transponder ID, which we don't know
         //therefore we toss 'em if there's syndrome
         //crc for the other short packets is usually nonzero, so they can't really be trusted that far
-        if(rx_packet.crc && (rx_packet.message_type == 11 || rx_packet.message_type == 17)) {continue;}
+
+
+        if(rx_packet.crc && (rx_packet.message_type == 11 || rx_packet.message_type == 17 || rx_packet.message_type == 14 || rx_packet.message_type == 15)) {continue;}
 
         pmt::pmt_t tstamp = tag_iter->value;
 
+        //int size = noutput_items - d_check_width; //since it's a sync block, i assume that it runs with ninput_items = noutput_items
+
+        size = packet_length * d_samples_per_symbol;
+
         d_payload.str("");
-        for(int m = 0; m < (packet_length+HASH_SIZE)/8; m++) {
+        for(int m = 0; m < packet_length/8; m++) {
             ///std::cout << m << " ";
             d_payload << std::hex << std::setw(2) << std::setfill('0') << unsigned(rx_packet.data[m]);
             //std::cout << std::hex << std::setw(2) << std::setfill('0') << unsigned(rx_packet.data[m]) << " ";
         }
 
-        d_payload << " " << std::setw(6) << rx_packet.crc << " " << std::dec << rx_packet.reference_level
+        d_payload << " " << std::dec << packet_length << " " << std::setw(6) << rx_packet.crc << " " << std::dec << rx_packet.reference_level
                   << " " << pmt::to_uint64(pmt::tuple_ref(tstamp, 0)) << " " << std::setprecision(10) << pmt::to_double(pmt::tuple_ref(tstamp, 1));
         //std::cout<< " " << std::setw(6) << rx_packet.crc << " " << std::dec << rx_packet.reference_level
                   //<< " " << pmt::to_uint64(pmt::tuple_ref(tstamp, 0)) << " " << std::setprecision(10) << pmt::to_double(pmt::tuple_ref(tstamp, 1));
         gr::message::sptr msg = gr::message::make_from_string(std::string(d_payload.str()));
         d_queue->handle(msg);
+
     }
-    if(0) std::cout << "Slicer consumed " << size << ", returned " << size << std::endl;
-    return size;
+    if(size!=0)
+    std::cout << "Slicer consumed " << size << ", returned " << max_size << std::endl;
+
+    return max_size;
 }
 
 } //namespace gr
+
+

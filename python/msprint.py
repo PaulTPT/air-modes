@@ -127,6 +127,28 @@ class output_print:
       return
     self._print(retstr)
 
+  def handle14(self, msg):
+    addr = msg.data["addr"]
+    key = msg.data["key"]
+    try:
+      retstr = output_print.prefix(msg)
+      retstr += "Type 14 : Signature"
+    except ADSBError:
+      return
+    self._print(retstr)
+
+  def handle15(self, msg):    sync = msg.data["sync"]
+    addr = msg.data["addr"]
+    key = msg.data["key"]
+    sig = msg.data["sig"]
+
+    try:
+      retstr = output_print.prefix(msg)
+      retstr += "Type 15 : key"
+    except ADSBError:
+      return
+    self._print(retstr)
+
   #the only one which requires state
   def handle17(self, msg):
     icao24 = msg.data["aa"]
@@ -177,7 +199,7 @@ class output_print:
     except ADSBError:
         return
 
-    retstr += " with hash= %x" %msg.data["hash"]
+    retstr += " with count= %i and hash= %x" %(msg.data["count"],msg.data["hash"])
 
     self._print(retstr)
 
