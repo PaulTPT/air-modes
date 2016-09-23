@@ -19,11 +19,15 @@
 # Boston, MA 02110-1301, USA.
 # 
 
-import time, os, sys
-from string import split, join
+
 import air_modes
 from air_modes.exceptions import *
-import math
+from M2Crypto import EC, m2
+import hashlib
+import time
+import calendar
+
+KEY_PERIOD=30
 
 #TODO get rid of class and convert to functions
 #no need for class here
@@ -31,6 +35,11 @@ class output_print:
   def __init__(self, cpr, publisher, callback=None):
     self._cpr = cpr
     self._callback = callback
+    self.pub_key=EC.load_pub_key("/home/paultpt/Documents/eckeys/ec_pubkey.pem")
+    self.last_key=""
+    self.last_key_interval=1
+    self.sync=-1
+
     #sub to every function that starts with "handle"
     self._fns = [int(l[6:]) for l in dir(self) if l.startswith("handle")]
     for i in self._fns:
@@ -101,6 +110,11 @@ class output_print:
     else:
       raise ADSBError
 
+  def to_bytes(self, n, length, endianess='big'):
+    h = '%x' % n
+    s = ('0' * (len(h) % 2) + h).zfill(length * 2).decode('hex')
+    return s if endianess == 'big' else s[::-1]
+
   def handle4(self, msg):
     try:
       retstr = output_print.prefix(msg)
@@ -128,23 +142,43 @@ class output_print:
     self._print(retstr)
 
   def handle14(self, msg):
+    #print "r : %x" % msg.data["r"]
+    #print "s : %x" % msg.data["s"]
+    sync = msg.data["sync"]
     addr = msg.data["addr"]
     key = msg.data["key"]
-    try:
-      retstr = output_print.prefix(msg)
-      retstr += "Type 14 : Signature"
-    except ADSBError:
-      return
+    r=m2.bn_to_mpi(m2.hex_to_bn("%x" % msg.data["r"]))
+    s=m2.bn_to_mpi(m2.hex_to_bn("%x" % msg.data["s"]))
+    data= msg.data["data"]
+    data_sha =hashlib.sha1(self.to_bytes(data,(data.bit_length()/8)+1,endianess='big')).digest()
+    #print "Data sha :"
+    #print hashlib.sha1(self.to_bytes(data,(data.bit_length()/8)+1,endianess='big')).hexdigest()
+    text="Wrong signature !"
+    if self.pub_key.verify_dsa(data_sha,r,s):
+      text="Signature verified."
+      self.last_key="%x" % key
+    retstr = output_print.prefix(msg)
+    retstr += "Type 14 : Signature with sync = %i and addr=%x . " %(sync, addr)
+    retstr+=text
     self._print(retstr)
 
-  def handle15(self, msg):    sync = msg.data["sync"]
+  def handle15(self, msg):
     addr = msg.data["addr"]
     key = msg.data["key"]
-    sig = msg.data["sig"]
-
+    secs=calendar.timegm(time.gmtime())
+    day=calendar.timegm(time.gmtime())/86400
+    sync=day%2
+    # In which time imterval are we ?
+    dif_sec=abs(sync-self.sync)*24*3600 + secs-day*86400
+    intervals=dif_sec/KEY_PERIOD-1
+    #Apply the one-way function the right number of times
+    #interval-last_key_interval
+    #if we find the last key, ok!
+    self.last_key=key
+    self.last_key_interval=secs/KEY_PERIOD-1
     try:
       retstr = output_print.prefix(msg)
-      retstr += "Type 15 : key"
+      retstr += "Type 15 : key with addr=%x and key = %x" % (addr, key)
     except ADSBError:
       return
     self._print(retstr)
